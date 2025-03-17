@@ -294,3 +294,90 @@ if(kbd_unsubscribe_int()) return 1;
 if(kbd_print_no_sysinb(sys_inb_cnt)) return 1;
 ```
 
+## 5.2 kbd_test_pool()
+
+In this function, we will do the same as the earlier fucntion we saw, but now using a pooling strategy instead of utilizing interrupt handling.
+
+For this function, we should take in mind the following:
+
+![alt text](../assets/lab3-4.png)
+
+
+- Need to write **command byte**, but first **read it**, and then write it before exiting function.
+- Should keep on pooling and check if the **scancode is available for read**(ALREADY DONE THIS IN LAST FUNCTION !!!).
+
+For now lets focus on writting a reusable function to execute commands, in this case the *command byte command*.
+
+How can we achieve this ?
+
+Issue a command (IMPORTANT can be extensible)
+
+![alt text](../assets/lab3-5.png)
+
+Existing commands:
+
+![alt text](../assets/lab3-6.png)
+
+Commands can return or take an argument. Should pass a variable **arg/return** to **use/store** that value.
+
+<details>
+    <summary> Answer </summary>
+
+    ```c
+    int (issue_kbc_command)(uint8_t cmd, uint8_t *arg_ret_value){
+        if (arg_ret_value == NULL) return 1;
+        uint8_t status;
+        if(util_sys_inb(KBC_ST_REG, &status)) return 1; // Read status register
+        if(status & KBC_IBF) return 1; // Check if IBF is set (Input buffer is full)
+
+        // Commands must be written in address 0x64
+        // Args need to be passed using address 0x60
+        // Return values can be read in the out_buf(0x60) register
+        switch (cmd)
+        {
+        case KBC_READ_CMD:
+            if(sys_outb(KBC_CMD_REG,cmd)) return 1;
+            if(util_sys_inb(KBC_OUT_BUF,arg_ret_value)) return 1;
+            break;
+        case KBC_WRITE_CMD:
+            if(sys_outb(KBC_CMD_REG,cmd)) return 1;
+            if(sys_outb(KBC_CMD_ARG_REG,*arg_ret_value)) return 1;
+            break;
+        // Other commands can be handled here
+        default:
+            break;
+        }
+    return 0;
+}
+    ```
+
+</details>
+
+Now that we have this function, we should create a wrapper that loops trought it until the command is successfully ran.
+
+How come we do this ?
+
+<details>
+    <summary> Answer </summary>
+
+    ```c
+    int (loop_over_kbc_command)(uint8_t cmd, uint8_t *arg_ret_value){
+        if(arg_ret_value == NULL) return 1;
+        
+        uint8_t max_tries = MAX_TRIES;
+        while (max_tries--)
+        {
+            if(issue_kbc_command(cmd,arg_ret_value) == 0){
+                return 0;
+            }
+            if(tickdelay(micros_to_ticks(DELAY_US))) return 1;
+        }
+        return 1;
+    }
+    ```
+
+</details>
+
+Having these functions will be very useful for later use in the project aswell as this lab.
+
+Now we just need to handle the pooling inside the interrupt loop.

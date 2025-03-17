@@ -16,6 +16,7 @@
 /* KBC Registers */ 
 #define KBC_ST_REG 0x64
 #define KBC_CMD_REG 0x64
+#define KBC_CMD_ARG_REG 0x60
 #define KBC_OUT_BUF 0x60
 
 /* KBC Status Register*/
@@ -35,5 +36,15 @@
 #define TWO_BYTE_CODE 0xE0
 #define INVALID_SCAN_CODE 0x00
 #define IS_BREAK_CODE BIT(7)
+
+/* KBC Commands */
+
+#define KBC_READ_CMD 0x20
+#define KBC_WRITE_CMD 0x60
+#define MAX_TRIES 5
+
+#define DELAY_US    20000
+
+/**@}*/
 
 #endif /* _LCOM_I8042_H */

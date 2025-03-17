@@ -100,10 +100,40 @@ int(kbd_test_scan)() {
 }
 
 int(kbd_test_poll)() {
-  /* To be completed by the students */
-  printf("%s is not yet implemented!\n", __func__);
+  int ipc_status;
+  message msg;
+  int r;
+  uint8_t irq_set = 1;
+  bool esc_pressed = false;
+  //bool isTwoByteScanCode = false;
 
-  return 1;
+  // Interrupt loop that runs until the ESC key is pressed
+  while( !esc_pressed ) { 
+     if ( (r = driver_receive(ANY, &msg, &ipc_status)) != 0 ) { 
+         printf("driver_receive failed with: %d", r);
+         continue;
+     }
+     if (is_ipc_notify(ipc_status)) { 
+         switch (_ENDPOINT_P(msg.m_source)) {
+             case HARDWARE: 			
+                if (msg.m_notify.interrupts & irq_set) {
+                    
+                 }
+                 break;
+             default:
+                 break; 
+         }
+    } else { 
+         
+     }
+  }
+  // Terminate the program correctly
+  uint8_t arg_ret;
+  if(loop_over_kbc_command(KBC_READ_CMD,&arg_ret)) return 1;
+  if(loop_over_kbc_command(KBC_WRITE_CMD,&arg_ret)) return 1;
+
+
+  return 0;
 }
 
 int(kbd_test_timed_scan)(uint8_t n) {

@@ -9,6 +9,10 @@ LCOM focuses on:
 - Working with **interrupts, timers, I/O devices, and graphics programming**.
 - Developing skills in **systems programming** using tools such as **Minix VM**.
 
+## ⚠️ Beware of Plagiarism ⚠️
+
+All submitted work must be **original**. This guide is for educational purposes only, copying **code** from this repository can lead to serious academic penalties. Always strive for understanding over replication!
+
 ## 🔥 Lab Exercises Overview
 The course consists of several labs, each designed to progressively teach key concepts.
 

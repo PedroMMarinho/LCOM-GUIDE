@@ -20,15 +20,19 @@ int (kbd_unsubscribe_int)(){
     return 0;
 }
 
+
 int (read_kbc_state)(){
-    kbd_error = 0;
+    kbd_error = 1;
     uint8_t status;
     // Read status register
     if(util_sys_inb(KBC_ST_REG, &status)) return 1;
+
+    bool cannot_read_out_buf = !(status & KBC_OBF) || (status & KBC_AUX); // If 0 then can read
+
+    kbd_error = status & (KBC_PARITY | KBC_TIMEOUT) || cannot_read_out_buf;
     
-    kbd_error = status & (KBC_PARITY | KBC_TIMEOUT | KBC_AUX);
     // Check if OBF is set (Data available for reading)
-    return !(status & KBC_OBF);
+    return cannot_read_out_buf;
 }
 
 int (read_out_buf)(){
@@ -60,6 +64,21 @@ bool (is_make_code)(uint8_t scancode){
     return !(scancode & IS_BREAK_CODE);
 }
 
+void (kbc_poll)(){
+    kbd_error = 1;
+    uint8_t tries = 0;
+    while (kbd_error && (tries < MAX_TRIES)){
+        tries++;
+        if(read_kbc_state()){
+            if(tickdelay(micros_to_ticks(DELAY_US))) return;
+            continue;
+        } 
+        
+        if(read_out_buf()) continue;
+        kbd_error = 0;
+    }
+    
+}
 
 int (issue_kbc_command)(uint8_t cmd, uint8_t *arg_ret_value){
     if (arg_ret_value == NULL) return 1;

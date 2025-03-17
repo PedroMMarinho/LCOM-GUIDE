@@ -2,10 +2,10 @@
 
 #include <lcom/lab3.h>
 
+#include "i8042.h"
+#include "keyboard.h"
 #include <stdbool.h>
 #include <stdint.h>
-#include "keyboard.h"
-#include "i8042.h"
 
 int main(int argc, char *argv[]) {
   // sets the language of LCF messages (can be either EN-US or PT-PT)
@@ -43,96 +43,117 @@ int(kbd_test_scan)() {
   bool esc_pressed = false;
   bool isTwoByteScanCode = false;
 
-  if(kbd_subscribe_int(&irq_set)) return 1;
+  if (kbd_subscribe_int(&irq_set))
+    return 1;
   // Interrupt loop that runs until the ESC key is pressed
-  while( !esc_pressed ) { 
-     
-     if ( (r = driver_receive(ANY, &msg, &ipc_status)) != 0 ) { 
-         printf("driver_receive failed with: %d", r);
-         continue;
-     }
-     if (is_ipc_notify(ipc_status)) { 
-         switch (_ENDPOINT_P(msg.m_source)) {
-             case HARDWARE: 			
-                if (msg.m_notify.interrupts & irq_set) {
-                    kbc_ih();
+  while (!esc_pressed) {
 
-                    if (!kbd_error){
-                        
-                        // Check type of ScanCode
-                        if(scancode == ESC_BREAK){
-                          esc_pressed = true;
-                        }
-                        if(scancode == INVALID_SCAN_CODE){
-                          continue;
-                        }
-                        if (scancode == TWO_BYTE_CODE){
-                           isTwoByteScanCode = true;
-                           continue;
-                        }
-                        
-                        uint8_t size = 1;
-                        uint8_t bytes[2];
+    if ((r = driver_receive(ANY, &msg, &ipc_status)) != 0) {
+      printf("driver_receive failed with: %d", r);
+      continue;
+    }
+    if (is_ipc_notify(ipc_status)) {
+      switch (_ENDPOINT_P(msg.m_source)) {
+        case HARDWARE:
+          if (msg.m_notify.interrupts & irq_set) {
+            kbc_ih();
 
-                        if (isTwoByteScanCode){
-                            isTwoByteScanCode = false;
-                            size = 2;
-                        }
-                        // Create array of scancode(s)
-                        if(create_scancode_array(bytes, size)) return 1;
-                        // Print to the terminal
-                        if(kbd_print_scancode(is_make_code(scancode),size,bytes)) return 1;
+            if (!kbd_error) {
 
-                    }
-                 }
-                 break;
-             default:
-                 break; 
-         }
-    } else { 
-         
-     }
+              // Check type of ScanCode
+              if (scancode == ESC_BREAK) {
+                esc_pressed = true;
+              }
+              if (scancode == INVALID_SCAN_CODE) {
+                continue;
+              }
+              if (scancode == TWO_BYTE_CODE) {
+                isTwoByteScanCode = true;
+                continue;
+              }
+
+              uint8_t size = 1;
+              uint8_t bytes[2];
+
+              if (isTwoByteScanCode) {
+                isTwoByteScanCode = false;
+                size = 2;
+              }
+              // Create array of scancode(s)
+              if (create_scancode_array(bytes, size))
+                return 1;
+              // Print to the terminal
+              if (kbd_print_scancode(is_make_code(scancode), size, bytes))
+                return 1;
+            }
+          }
+          break;
+        default:
+          break;
+      }
+    }
+    else {
+    }
   }
-  if(kbd_unsubscribe_int()) return 1;
-  if(kbd_print_no_sysinb(sys_inb_cnt)) return 1;
+  if (kbd_unsubscribe_int())
+    return 1;
+  if (kbd_print_no_sysinb(sys_inb_cnt))
+    return 1;
   printf("Ended sucessfully\n");
   return 0;
 }
 
 int(kbd_test_poll)() {
-  int ipc_status;
-  message msg;
-  int r;
-  uint8_t irq_set = 1;
+  
   bool esc_pressed = false;
-  //bool isTwoByteScanCode = false;
+  bool isTwoByteScanCode = false;
 
-  // Interrupt loop that runs until the ESC key is pressed
-  while( !esc_pressed ) { 
-     if ( (r = driver_receive(ANY, &msg, &ipc_status)) != 0 ) { 
-         printf("driver_receive failed with: %d", r);
-         continue;
-     }
-     if (is_ipc_notify(ipc_status)) { 
-         switch (_ENDPOINT_P(msg.m_source)) {
-             case HARDWARE: 			
-                if (msg.m_notify.interrupts & irq_set) {
-                    
-                 }
-                 break;
-             default:
-                 break; 
-         }
-    } else { 
-         
-     }
+  int tries = 0; // Optional to avoid infinite loop
+  
+  // Pool loop that runs until the ESC key is pressed
+  while (!esc_pressed && tries < 250) {
+    tries++;
+    kbc_poll();
+
+    if (!kbd_error) {
+      // Check type of ScanCode
+      if (scancode == ESC_BREAK) {
+        esc_pressed = true;
+      }
+      if (scancode == INVALID_SCAN_CODE) {
+        continue;
+      }
+      if (scancode == TWO_BYTE_CODE) {
+        isTwoByteScanCode = true;
+        continue;
+      }
+
+      uint8_t size = 1;
+      uint8_t bytes[2];
+
+      if (isTwoByteScanCode) {
+        isTwoByteScanCode = false;
+        size = 2;
+      }
+
+      // Create array of scancode(s)
+      if (create_scancode_array(bytes, size))
+        return 1;
+      // Print to the terminal
+      if (kbd_print_scancode(is_make_code(scancode), size, bytes))
+        return 1;
+    }
   }
+  
   // Terminate the program correctly
   uint8_t arg_ret;
-  if(loop_over_kbc_command(KBC_READ_CMD,&arg_ret)) return 1;
-  if(loop_over_kbc_command(KBC_WRITE_CMD,&arg_ret)) return 1;
-
-
+  if (loop_over_kbc_command(KBC_READ_CMD, &arg_ret))
+    return 1;
+  if (loop_over_kbc_command(KBC_WRITE_CMD, &arg_ret))
+    return 1;
+  if (kbd_print_no_sysinb(sys_inb_cnt))
+    return 1;
+  printf("Ended sucessfully\n");
   return 0;
 }
 

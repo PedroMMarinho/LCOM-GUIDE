@@ -380,4 +380,75 @@ How come we do this ?
 
 Having these functions will be very useful for later use in the project aswell as this lab.
 
-Now we just need to handle the pooling inside the interrupt loop.
+Now we just need to handle the polling loop.
+
+How can we achieve this ?
+
+<details>
+    <summary> Answer </summary>
+
+```c
+int tries = 0; // Optional to avoid infinite loop
+  
+  // Pool loop that runs until the ESC key is pressed
+  while (!esc_pressed && tries < 250) {
+    tries++;
+    kbc_poll();
+
+    if (!kbd_error) {
+      // Check type of ScanCode
+      if (scancode == ESC_BREAK) {
+        esc_pressed = true;
+      }
+      if (scancode == INVALID_SCAN_CODE) {
+        continue;
+      }
+      if (scancode == TWO_BYTE_CODE) {
+        isTwoByteScanCode = true;
+        continue;
+      }
+
+      uint8_t size = 1;
+      uint8_t bytes[2];
+
+      if (isTwoByteScanCode) {
+        isTwoByteScanCode = false;
+        size = 2;
+      }
+
+      // Create array of scancode(s)
+      if (create_scancode_array(bytes, size))
+        return 1;
+      // Print to the terminal
+      if (kbd_print_scancode(is_make_code(scancode), size, bytes))
+        return 1;
+    }
+  }
+```
+
+</details>
+
+
+Easy, just need to iterate while **ESC** is not pressed and optionally limit a number of iterations of that loop. We then call ``kbc_poll`` that has a more resilient error avoidance, having a number of tries to see if we can read correctly the KBC data, over that period of time.
+
+```c
+void (kbc_poll)(){
+    kbd_error = 1;
+    uint8_t tries = 0;
+    while (kbd_error && (tries < MAX_TRIES)){
+        tries++;
+        if(read_kbc_state()){
+            if(tickdelay(micros_to_ticks(DELAY_US))) return;
+            continue;
+        } 
+        
+        if(read_out_buf()) continue;
+        kbd_error = 0;
+    }
+    
+}
+```
+
+### 5.3 kbd_test_timed_scan(uint8_t idle)
+
+Now to the last, but not least important function, we will use the keyboard and mouse interrupts at the same time, to see if it really is possible to handle interrupts from both devices. In this case, we will do the same thing has we did in function **5.1**, but now terminate the program in case the number of seconds ``idle`` is equal to the number of seconds that have passed.

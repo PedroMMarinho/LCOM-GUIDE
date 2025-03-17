@@ -80,6 +80,29 @@ cnt++;
 #endif
 ```
 
+**IMPORTANT SIDE NOTE**: When needing variables in more than one file, there are two ways to handle that.
+
+```c 
+        /* Use extern variable */
+extern int kbd_error;
+extern uint8_t scancode;
+extern int sys_inb_cnt;
+```
+
+This makes it so we can access these variables in other file.
+
+Or use a ``getter``.
+
+```c
+uint8_t global_kbd_error;
+int (get_kbd_error)(uint8_t *kbd_error){
+    if(kbd_error == NULL) return 1;
+    *kbd_error = global_kbd_error;
+    return 0;
+}
+
+```
+
 Lastly, probably want to create an ``i8042.h`` file to store important keyboard macros.
 
 ## 5.1 kbd_test_scan()
@@ -263,3 +286,11 @@ How to do this ?
     ```
 
 </details>
+
+Finally we can print the number of ``sys_inb_calls`` made during the whole program, and unsubscribe the keyboard IRQ.
+
+```c
+if(kbd_unsubscribe_int()) return 1;
+if(kbd_print_no_sysinb(sys_inb_cnt)) return 1;
+```
+

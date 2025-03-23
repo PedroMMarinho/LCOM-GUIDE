@@ -195,6 +195,7 @@ int(kbd_test_timed_scan)(uint8_t idle) {
           if (msg.m_notify.interrupts & kbd_int_bit) {
             // Reset time passed
             seconds_passed = 0;
+            timer_counter = 0;
             kbc_ih();
 
             if (!kbd_error) {

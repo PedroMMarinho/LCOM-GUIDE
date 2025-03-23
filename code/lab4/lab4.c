@@ -3,7 +3,8 @@
 
 #include <stdint.h>
 #include <stdio.h>
-
+#include "mouse.h"
+# include "kbc.h"
 // Any header files included below this line should have been created by you
 
 int main(int argc, char *argv[]) {
@@ -32,9 +33,74 @@ int main(int argc, char *argv[]) {
 
 
 int (mouse_test_packet)(uint32_t cnt) {
-    /* To be completed */
-    printf("%s(%u): under construction\n", __func__, cnt);
+
+  int ipc_status;
+  message msg;
+  int r;
+
+  uint8_t mouse_int_bit;
+  uint8_t num_byte = 0;
+  printf("Started\n");
+  // Set the mouse to stream mode
+  // if (mouse_enable_data_reporting()) return 1; // Provided function
+  if (mouse_enable_data_report()) return 1; // Our function 
+  
+  if (mouse_subscribe_int(&mouse_int_bit))
     return 1;
+
+  
+  // Read cnt packets
+  while (cnt) {
+
+    if ((r = driver_receive(ANY, &msg, &ipc_status)) != 0) {
+      printf("driver_receive failed with: %d", r);
+      continue;
+    }
+    if (is_ipc_notify(ipc_status)) {
+      switch (_ENDPOINT_P(msg.m_source)) {
+        case HARDWARE:
+          if (msg.m_notify.interrupts & mouse_int_bit) {
+             mouse_ih();
+             // Check if there was an error
+             int error;
+             if (get_kbc_error(&error))
+               return 1;
+              // If no errors were found
+              if (!error){
+
+              if(handle_byte_sinc(&num_byte)) return 1; 
+
+              if (num_byte == 3){
+
+                parse_packet();
+                struct packet pp;
+                if (get_packet(&pp))
+                  return 1;
+                mouse_print_packet(&pp);
+                num_byte = 0;
+                cnt--;
+              }
+
+            }
+
+          }
+          break;
+        default:
+          break;
+      }
+    }
+  }
+  
+
+  
+  if (mouse_unsubscribe_int())
+    return 1;
+
+  if (mouse_disable_data_report())
+    return 1;
+
+  printf("Ended sucessfully\n");
+  return 0;
 }
 
 int (mouse_test_async)(uint8_t idle_time) {
@@ -43,7 +109,7 @@ int (mouse_test_async)(uint8_t idle_time) {
     return 1;
 }
 
-int (mouse_test_gesture)() {
+int (mouse_test_gesture)(uint8_t x_len, uint8_t tolerance) {
     /* To be completed */
     printf("%s: under construction\n", __func__);
     return 1;

@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include "mouse.h"
 # include "kbc.h"
+#include "i8042.h"
 // Any header files included below this line should have been created by you
 
 int main(int argc, char *argv[]) {
@@ -47,6 +48,7 @@ int (mouse_test_packet)(uint32_t cnt) {
   
   if (mouse_subscribe_int(&mouse_int_bit))
     return 1;
+  
 
   
   // Read cnt packets
@@ -103,10 +105,88 @@ int (mouse_test_packet)(uint32_t cnt) {
   return 0;
 }
 
+extern int timer_counter;
+
 int (mouse_test_async)(uint8_t idle_time) {
-    /* To be completed */
-    printf("%s(%u): under construction\n", __func__, idle_time);
+  int ipc_status;
+  message msg;
+  int r;
+  int frequency = sys_hz();
+  uint8_t mouse_int_bit;
+  uint8_t timer_int_bit;
+
+  uint8_t num_byte = 0;
+  uint8_t time_passed = 0;
+  printf("Started\n");
+  // Set the mouse to stream mode
+  // if (mouse_enable_data_reporting()) return 1; // Provided function
+  if (mouse_enable_data_report()) return 1; // Our function 
+  
+  if (mouse_subscribe_int(&mouse_int_bit))
     return 1;
+
+  if (timer_subscribe_int(&timer_int_bit))
+    return 1;
+  
+  // Read cnt packets
+  while (time_passed < idle_time) {
+
+    if ((r = driver_receive(ANY, &msg, &ipc_status)) != 0) {
+      printf("driver_receive failed with: %d", r);
+      continue;
+    }
+    if (is_ipc_notify(ipc_status)) {
+      switch (_ENDPOINT_P(msg.m_source)) {
+        case HARDWARE:
+
+          if (msg.m_notify.interrupts & timer_int_bit) {
+            timer_int_handler();
+            if (timer_counter % frequency == 0){
+              time_passed++;
+            }
+          }
+          if (msg.m_notify.interrupts & mouse_int_bit) {
+             time_passed = 0;
+             timer_counter = 0;
+             mouse_ih();
+             // Check if there was an error
+             int error;
+             if (get_kbc_error(&error))
+               return 1;
+              // If no errors were found
+              if (!error){
+
+              if(handle_byte_sinc(&num_byte)) return 1; 
+
+              if (num_byte == 3){
+
+                parse_packet();
+                struct packet pp;
+                if (get_packet(&pp))
+                  return 1;
+                mouse_print_packet(&pp);
+                num_byte = 0;
+              }
+
+            }
+
+          }
+          break;
+        default:
+          break;
+      }
+    }
+  }
+  
+  
+  if (mouse_unsubscribe_int())
+    return 1;
+
+  if (mouse_disable_data_report())
+    return 1;
+
+  printf("Ended sucessfully\n");
+  return 0;
 }
 
 int (mouse_test_gesture)(uint8_t x_len, uint8_t tolerance) {

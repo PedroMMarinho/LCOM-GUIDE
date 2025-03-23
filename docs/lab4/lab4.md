@@ -175,3 +175,100 @@ if (mouse_unsubscribe_int())
 ```
 
 ## 5.2 mouse_test_async(uint8_t idle_time)
+
+Same as the other function but now handle the time passed. Nothing new here as we have already seen how to do that in **lab3**, but now we are handling input from the mouse. 
+
+What we need to do ?
+
+- Also subscribe the timer using a different **hook_id**.
+- Have in mind the set frequency, can use ``sys_hz()``, to see check the frequency. (Number of timer interrupts per second)
+- When **time_passed** has already gone beyond the **idle_time**, terminate the program correctly.
+
+```c
+extern int timer_counter;
+
+int (mouse_test_async)(uint8_t idle_time) {
+  int ipc_status;
+  message msg;
+  int r;
+  int frequency = sys_hz();
+  uint8_t mouse_int_bit;
+  uint8_t timer_int_bit;
+
+  uint8_t num_byte = 0;
+  uint8_t time_passed = 0;
+  printf("Started\n");
+  // Set the mouse to stream mode
+  // if (mouse_enable_data_reporting()) return 1; // Provided function
+  if (mouse_enable_data_report()) return 1; // Our function 
+  
+  if (mouse_subscribe_int(&mouse_int_bit))
+    return 1;
+
+  if (timer_subscribe_int(&timer_int_bit))
+    return 1;
+  
+  // Read cnt packets
+  while (time_passed < idle_time) {
+
+    if ((r = driver_receive(ANY, &msg, &ipc_status)) != 0) {
+      printf("driver_receive failed with: %d", r);
+      continue;
+    }
+    if (is_ipc_notify(ipc_status)) {
+      switch (_ENDPOINT_P(msg.m_source)) {
+        case HARDWARE:
+
+          if (msg.m_notify.interrupts & timer_int_bit) {
+            timer_int_handler();
+            if (timer_counter % frequency == 0){
+              time_passed++;
+            }
+          }
+          if (msg.m_notify.interrupts & mouse_int_bit) {
+             time_passed = 0;
+             timer_counter = 0;
+             mouse_ih();
+             // Check if there was an error
+             int error;
+             if (get_kbc_error(&error))
+               return 1;
+              // If no errors were found
+              if (!error){
+
+              if(handle_byte_sinc(&num_byte)) return 1; 
+
+              if (num_byte == 3){
+
+                parse_packet();
+                struct packet pp;
+                if (get_packet(&pp))
+                  return 1;
+                mouse_print_packet(&pp);
+                num_byte = 0;
+              }
+
+            }
+
+          }
+          break;
+        default:
+          break;
+      }
+    }
+  }
+  
+  
+  if (mouse_unsubscribe_int())
+    return 1;
+
+  if (mouse_disable_data_report())
+    return 1;
+
+  printf("Ended sucessfully\n");
+  return 0;
+}
+```
+
+## 5.3 mouse_test_gesture(uint8_t x_len, uint8_t tolerance)
+
